@@ -1,80 +1,134 @@
-import React from "react"
+import React, {
+  useImperativeHandle,
+  forwardRef,
+  useEffect,
+  useState,
+  useRef
+} from "react";
+import Draggable from "react-draggable";
+import { toCanvas } from "html-to-image";
 
-export default function Meme() {
-    const [meme, setMeme] = React.useState({
-        topText: "",
-        bottomText: "",
-        randomImage: "http://i.imgflip.com/1bij.jpg" 
-    })
-    const [allMemes, setAllMemes] = React.useState([])
-    
-    /**
-    useEffect takes a function as its parameter. If that function
-    returns something, it needs to be a cleanup function. Otherwise,
-    it should return nothing. If we make it an async function, it
-    automatically retuns a promise instead of a function or nothing.
-    Therefore, if you want to use async operations inside of useEffect,
-    you need to define the function separately inside of the callback
-    function, as seen below:
-    */
-    
-    React.useEffect(() => {
-        async function getMemes() {
-            const res = await fetch("https://api.imgflip.com/get_memes")
-            const data = await res.json()
-            setAllMemes(data.data.memes)
-        }
-        getMemes()
-    }, [])
-    
-    function getMemeImage() {
-        const randomNumber = Math.floor(Math.random() * allMemes.length)
-        const url = allMemes[randomNumber].url
-        setMeme(prevMeme => ({
-            ...prevMeme,
-            randomImage: url
-        }))
+const Meme = forwardRef((props, ref) => {
+  const [meme, setMeme] = useState({
+    randomImage: "http://i.imgflip.com/1bij.jpg",
+  });
+
+  const [selectedImage, setSelectedImage] = useState(null);
+  const imageInputRef = useRef(null);
+  const [allMemes, setAllMemes] = useState([]);
+
+  useEffect(() => {
+    async function getMemes() {
+      const res = await fetch("https://api.imgflip.com/get_memes");
+      const data = await res.json();
+      setAllMemes(data.data.memes);
     }
-    
-    function handleChange(event) {
-        const {name, value} = event.target
-        setMeme(prevMeme => ({
-            ...prevMeme,
-            [name]: value
-        }))
+
+    if (!allMemes.length) {
+      getMemes();
     }
-    
-    return (
-        <main>
-            <div className="form">
-                <input 
-                    type="text"
-                    placeholder="Top text"
-                    className="form--input"
-                    name="topText"
-                    value={meme.topText}
-                    onChange={handleChange}
-                />
-                <input 
-                    type="text"
-                    placeholder="Bottom text"
-                    className="form--input"
-                    name="bottomText"
-                    value={meme.bottomText}
-                    onChange={handleChange}
-                />
-                <button 
-                    className="form--button"
-                    onClick={getMemeImage}
-                >
-                    Get a new meme image 🖼
-                </button>
-            </div>
-            <div className="meme">
-                <img src={meme.randomImage} className="meme--image" />
-                <h2 className="meme--text top">{meme.topText}</h2>
-                <h2 className="meme--text bottom">{meme.bottomText}</h2>
-            </div>
-        </main>
-    )
-}
+  }, [allMemes]);
+
+
+  const getMemeImage = () => {
+    if (selectedImage) {
+      setSelectedImage(null); // Reset selected image to display random meme
+    } else {
+      const randomNumber = Math.floor(Math.random() * allMemes.length);
+      const url = allMemes[randomNumber].url;
+      setMeme((prevMeme) => ({
+        ...prevMeme,
+        randomImage: url,
+      }));
+    }
+  };
+
+  const handleImageChange = (event) => {
+    const file = event.target.files[0];
+
+    if (file) {
+      const reader = new FileReader();
+
+      reader.onload = (e) => {
+        // Update the state with the selected image data URL
+        setSelectedImage(e.target.result);
+      };
+
+      // Read the selected image as a data URL
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleDownload = async () => {
+    const container = document.querySelector(".meme-display");
+
+    // Use toCanvas function to capture the content as a canvas element
+    const canvas = await toCanvas(container);
+
+    // Get the canvas data URL
+    const dataUrl = canvas.toDataURL("image/png");
+
+    // Create a link element
+    const a = document.createElement("a");
+
+    // Set the download attribute with the desired file name
+    a.download = "custom-meme.png";
+
+    // Set the href attribute with the data URL
+    a.href = dataUrl;
+
+    // Trigger a click event
+    a.click();
+  };
+
+    // Function to trigger file input from an external element
+    const triggerFileInput = () => {
+      if (imageInputRef.current) {
+        imageInputRef.current.click();
+      }
+    };
+
+  // Expose getMemeImage function to the parent component
+  useImperativeHandle(ref, () => ({
+    getMemeImage,
+    handleDownload,
+    triggerFileInput,
+  }));
+
+  return (
+    <div className="meme-display">
+      {selectedImage ? (
+        <img
+          src={selectedImage}
+          alt="Uploaded Meme"
+          className="meme--image"
+          crossOrigin="anonymous"
+        />
+      ) : (
+        <img
+          src={meme.randomImage}
+          alt="Random Meme"
+          className="meme--image"
+          crossOrigin="anonymous"
+        />
+      )}
+      <Draggable>
+        <input className="input-text" placeholder="Edit This" />
+      </Draggable>
+      <div>
+      <Draggable>
+        <input className="input-text" placeholder="Edit This" />
+      </Draggable>
+      </div>
+      <input
+        type="file"
+        accept="image/*"
+        style={{ display: "none" }}
+        ref={imageInputRef}
+        onChange={handleImageChange}
+      />
+    </div>
+  );
+});
+
+export default Meme;
